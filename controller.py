@@ -113,12 +113,21 @@ class OledStatus:
         if self.device is None or text == self.last_text:
             return
         try:
-            from luma.core.render import canvas
-            with canvas(self.device) as draw:
-                box = draw.textbbox((0, 0), text, font=self.font)
-                x = (128 - (box[2] - box[0])) // 2 - box[0]
-                y = (32 - (box[3] - box[1])) // 2 - box[1]
-                draw.text((x, y), text, font=self.font, fill="white")
+            from PIL import Image, ImageDraw
+            frame = Image.new("1", (128, 32))
+            box = ImageDraw.Draw(frame).textbbox((0, 0), text, font=self.font)
+            width, height = box[2] - box[0], box[3] - box[1]
+            label = Image.new("1", (max(1, width), max(1, height)))
+            ImageDraw.Draw(label).text((-box[0], -box[1]), text,
+                                       font=self.font, fill="white")
+            # Fit within a four-pixel margin, keeping long source names visible.
+            scale = min(120 / label.width, 24 / label.height)
+            label = label.resize((max(1, int(label.width * scale)),
+                                  max(1, int(label.height * scale))),
+                                 resample=Image.Resampling.NEAREST)
+            frame.paste(label, ((128 - label.width) // 2,
+                                (32 - label.height) // 2))
+            self.device.display(frame)
             self.last_text = text
         except Exception as error:
             LOG.warning("OLED update failed; keys remain enabled: %s", error)

@@ -80,6 +80,8 @@ Replace `1` with your configured display number in the manual query. A typical r
 
 Once the GPIO keys are open and the controller is ready, the OLED initially shows `Ready`, then the detected source: `HDMI 1`, `HDMI 2`, `HDMI 3`, or `DisplayPort`. Starting the controller does not switch the monitor. It reads the actual source after each switching attempt and every five seconds while idle, so monitor-menu changes can also appear. A read can take up to `command_timeout` seconds and runs in the same worker as switching; a pending key waits for that read to finish.
 
+Text is enlarged automatically and centered within a 120×24 pixel area, leaving a four-pixel margin. Longer labels such as `DisplayPort` shrink enough to remain fully visible. No extra font package or configuration change is needed.
+
 If the monitor is off, a read fails, or the source is unknown, the OLED shows `Ready`. This means the button controller is ready, not that the source has been confirmed. A successful switching command alone does not change the displayed label; the monitor must report the source. Test querying while another input is active: inactive-input DDC support depends on the monitor.
 
 Press each button and check the display. Stop with Ctrl+C; the OLED is cleared on exit. `--dry-run` only tests button logging and does not open the OLED or query DDC. `--check-config` validates without hardware access.
