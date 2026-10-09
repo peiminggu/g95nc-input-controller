@@ -3,9 +3,9 @@
   "bounce_time": 0.05,
   "command_timeout": 15,
   "keys": [
-    {"name": "Key 1", "gpio": 17, "input": null},
-    {"name": "Key 2", "gpio": 27, "input": null},
-    {"name": "Key 3", "gpio": 22, "input": null},
-    {"name": "Key 4", "gpio": 23, "input": null}
+    {"name": "HDMI 1", "gpio": 17, "input": "0x11"},
+    {"name": "HDMI 2", "gpio": 27, "input": "0x12"},
+    {"name": "DP", "gpio": 22, "input": "0x0f"},
+    {"name": "HDMI 3", "gpio": 23, "input": "0x32"}
   ]
 }

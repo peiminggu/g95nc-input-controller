@@ -103,9 +103,62 @@ echo i2c-dev | sudo tee /etc/modules-load.d/g95nc-i2c.conf
 Before enabling autostart, test device access using the actual service account:
 
 ```bash
+sudo install -d -o g95nc-controller -g g95nc-controller -m 700 /run/g95nc-controller
 sudo -u g95nc-controller ddcutil detect
-sudo -u g95nc-controller /usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
+sudo -u g95nc-controller env LG_WD=/run/g95nc-controller /usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
 ```
+
+GPIO Zero's lgpio backend creates notification pipes. `LG_WD` gives it a writable directory instead of the invoking user's checkout. The service creates this private runtime directory automatically on each start and uses it as its working directory. `/run` is temporary; the installed script and configuration remain in `/opt` and `/etc`.
+
+### Complete g95nc-controller.service configuration
+
+The copy command above installs [deploy/g95nc-controller.service](../deploy/g95nc-controller.service). If you already installed an older version, inspect or edit the installed file:
+
+```bash
+sudo nano /etc/systemd/system/g95nc-controller.service
+```
+
+Its complete contents should be:
+
+```ini
+[Unit]
+Description=G95NC GPIO input controller
+After=systemd-modules-load.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=g95nc-controller
+SupplementaryGroups=gpio i2c
+RuntimeDirectory=g95nc-controller
+RuntimeDirectoryMode=0700
+WorkingDirectory=/run/g95nc-controller
+Environment=LG_WD=/run/g95nc-controller
+ExecStart=/usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Keep both `Environment=` lines: `LG_WD` sets the GPIO notification directory, while `PYTHONUNBUFFERED=1` makes Python logs appear immediately. Do not comment either out. All runtime directory settings belong under `[Service]`; their order within that section does not matter.
+
+Save in nano with Ctrl+O, Enter, then Ctrl+X. After editing an existing service, stop any foreground controller test, then reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart g95nc-controller.service
+sudo systemctl enable g95nc-controller.service
+journalctl -u g95nc-controller.service -n 30 --no-pager
+```
+
+For a first installation, finish the foreground test and use the enable/start commands below.
 
 Press the keys to verify switching, then stop with Ctrl+C. If this fails while the earlier root test worked, fix device/group permissions first. The service does not use sudo or need a password.
 
@@ -171,6 +224,7 @@ Stop temporarily with `sudo systemctl stop g95nc-controller.service`. Disable au
 | --- | --- |
 | Configuration invalid / service keeps restarting | Read the journal; validate the installed JSON. Assign at least one verified input code. |
 | GPIO access denied | Check the `gpio` group and device permissions; verify Step 2 key detection. |
+| `lguGetWorkDir` / `.lgd-nfy` permission errors | Use the runtime directory and `LG_WD` in the service-account test above. Ensure the installed service includes `RuntimeDirectory`, `WorkingDirectory`, and `LG_WD`. |
 | I2C access denied | Check the detected HDMI adapter's `i2c` group permissions and service account membership. |
 | Key appears but switching fails | Repeat the Step 1 command manually; check display number, input value, HDMI/DDC availability, and journal error. |
 | Wrong source appears | Correct the verified input mapping; check whether the key signal wires are swapped. |
