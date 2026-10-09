@@ -1,0 +1,20 @@
+[Unit]
+Description=G95NC GPIO input controller
+After=systemd-modules-load.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=g95nc-controller
+SupplementaryGroups=gpio i2c
+ExecStart=/usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
