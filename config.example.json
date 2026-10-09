@@ -2,10 +2,12 @@
   "display": 1,
   "bounce_time": 0.05,
   "command_timeout": 15,
+  "oled_enabled": false,
+  "oled_address": "0x3c",
   "keys": [
     {"name": "HDMI 1", "gpio": 17, "input": "0x11"},
     {"name": "HDMI 2", "gpio": 27, "input": "0x12"},
-    {"name": "DP", "gpio": 22, "input": "0x0f"},
+    {"name": "DisplayPort", "gpio": 22, "input": "0x0f"},
     {"name": "HDMI 3", "gpio": 23, "input": "0x32"}
   ]
 }

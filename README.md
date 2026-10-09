@@ -7,6 +7,7 @@ Control Samsung G95NC input source with a Raspberry Pi.
 1. [Step 1 — Set up the Pi and verify monitor control](doc/setup-guide.md)
 2. [Step 2 — Setup Keys: detailed GPIO wiring and diagrams](doc/setup-keys.md)
 3. [Step 3 — Install the key controller and start it automatically on the Pi](doc/setup-controller.md)
+4. [Step 4 — Add an optional 128×32 OLED source display](doc/setup-oled.md)
 
 `controller.py` monitors the GPIO keys and switches inputs through `ddcutil`.
 Copy `config.example.json` to `config.json`, assign the verified input values

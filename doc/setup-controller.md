@@ -25,11 +25,11 @@ cp -n config.example.json config.json
 nano config.json
 ```
 
-No pip installation or virtual environment is needed; use Raspberry Pi OS's packaged GPIO Zero library and system Python.
+No pip installation or virtual environment is needed; use Raspberry Pi OS's packaged GPIO Zero library and system Python. For an optional source display, follow [Step 4 — OLED setup](setup-oled.md).
 
 ## 2. Assign each key to a verified input
 
-Set `display` to the G95NC display number from `sudo ddcutil detect`. Replace each `null` with the input value you physically verified in Step 1, enclosed in quotes, for example `"0x11"`. That value is an example, **not a confirmed G95NC port mapping**. Leave unused keys as `null`; at least one key must have an input assigned. The supplied example deliberately has no input codes assigned.
+Set `display` to the G95NC display number from `sudo ddcutil detect`. Verify each supplied input value against the ports tested in Step 1; the supplied codes are examples, **not a confirmed G95NC port mapping**. Leave unused keys as `null`; at least one key must have an input assigned.
 
 | Key | BCM GPIO | Physical pin | Configuration entry |
 | --- | --- | --- | --- |

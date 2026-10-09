@@ -7,10 +7,12 @@ import logging
 import math
 from pathlib import Path
 import queue
+import re
 import shutil
 import signal
 import subprocess
 import threading
+import time
 
 LOG = logging.getLogger("g95nc")
 
@@ -21,6 +23,16 @@ def load_config(path):
     if not isinstance(config, dict):
         raise ValueError("Configuration must be a JSON object")
     display = config.get("display", 1)
+    oled_enabled = config.get("oled_enabled", False)
+    if type(oled_enabled) is not bool:
+        raise ValueError("oled_enabled must be true or false")
+    config["oled_enabled"] = oled_enabled
+    address = config.get("oled_address", "0x3c")
+    if isinstance(address, str):
+        address = int(address, 16)
+    if type(address) is not int or not 0x08 <= address <= 0x77:
+        raise ValueError("oled_address must be a valid 7-bit I2C address")
+    config["oled_address"] = address
     if type(display) is not int or display < 1:
         raise ValueError("display must be a positive integer")
     for field, default in (("bounce_time", 0.05), ("command_timeout", 15)):
@@ -40,6 +52,8 @@ def load_config(path):
         if type(pin) is not int or not 0 <= pin <= 27 or pin in pins:
             raise ValueError("Each gpio must be a unique BCM number from 0 to 27")
         pins.add(pin)
+        if oled_enabled and pin in (2, 3):
+            raise ValueError("GPIO2 and GPIO3 are reserved for the enabled OLED")
         name = key.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("Each key needs a non-empty name")
@@ -54,6 +68,69 @@ def load_config(path):
     if not enabled:
         raise ValueError("Set at least one key input to a verified VCP value; null disables a key")
     return dict(config, display=display, keys=enabled)
+
+
+def current_source(config):
+    """Read the actual VCP source; never guess from a successful set command."""
+    try:
+        result = subprocess.run(
+            ["ddcutil", "--display", str(config["display"]), "--terse", "getvcp", "60"],
+            capture_output=True, text=True, timeout=config["command_timeout"], check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return "Ready"
+    if result.returncode:
+        return "Ready"
+    match = re.search(r"^VCP 60 SNC x([0-9a-fA-F]+)\s*$", result.stdout, re.MULTILINE)
+    if match:
+        value = int(match.group(1), 16)
+        for key in config["keys"]:
+            if int(key["input"], 16) == value:
+                name = key["name"]
+                if name in ("DP", "DisplayPort"):
+                    return "DisplayPort"
+                if name in ("HDMI 1", "HDMI 2", "HDMI 3"):
+                    return name
+    return "Ready"
+
+
+class OledStatus:
+    """Optional SSD1306 display. Failures must not stop the GPIO controller."""
+
+    def __init__(self, config):
+        self.device = None
+        self.last_text = None
+        try:
+            from luma.core.interface.serial import i2c
+            from luma.oled.device import ssd1306
+            from PIL import ImageFont
+            self.font = ImageFont.load_default()
+            self.device = ssd1306(i2c(port=1, address=config["oled_address"]),
+                                  width=128, height=32)
+        except Exception as error:
+            LOG.warning("OLED unavailable; keys remain enabled: %s", error)
+
+    def show(self, text):
+        if self.device is None or text == self.last_text:
+            return
+        try:
+            from luma.core.render import canvas
+            with canvas(self.device) as draw:
+                box = draw.textbbox((0, 0), text, font=self.font)
+                x = (128 - (box[2] - box[0])) // 2 - box[0]
+                y = (32 - (box[3] - box[1])) // 2 - box[1]
+                draw.text((x, y), text, font=self.font, fill="white")
+            self.last_text = text
+        except Exception as error:
+            LOG.warning("OLED update failed; keys remain enabled: %s", error)
+            self.close()
+
+    def close(self):
+        if self.device is not None:
+            try:
+                self.device.cleanup()
+            except Exception as error:
+                LOG.warning("OLED cleanup failed: %s", error)
+            self.device = None
 
 
 def switch_input(config, key, dry_run=False):
@@ -83,6 +160,7 @@ def monitor_keys(config, stop, dry_run=False, button_factory=None):
         button_factory = Button
     presses = queue.Queue(maxsize=16)
     buttons = []
+    oled = None
 
     def enqueue(key):
         if stop.is_set():
@@ -101,14 +179,28 @@ def monitor_keys(config, stop, dry_run=False, button_factory=None):
             button.when_pressed = lambda key=key: enqueue(key)
         LOG.info("Ready: %s. Press a key to switch; Ctrl+C stops.",
                  ", ".join(key["name"] for key in config["keys"]))
+        if config["oled_enabled"] and not dry_run:
+            oled = OledStatus(config)
+            oled.show("Ready")
+            if oled.device is not None:
+                oled.show(current_source(config))
+        next_refresh = time.monotonic() + 5
         while not stop.is_set():
             try:
                 key = presses.get(timeout=0.2)
             except queue.Empty:
+                if oled is not None and oled.device is not None and time.monotonic() >= next_refresh:
+                    oled.show(current_source(config))
+                    next_refresh = time.monotonic() + 5
                 continue
             if not stop.is_set():
                 switch_input(config, key, dry_run)
+                if oled is not None and oled.device is not None and not stop.is_set():
+                    oled.show(current_source(config))
+                    next_refresh = time.monotonic() + 5
     finally:
+        if oled is not None:
+            oled.close()
         for button in buttons:
             button.close()
 
