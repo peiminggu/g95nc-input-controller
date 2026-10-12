@@ -17,6 +17,7 @@ The commands below verify manual and remote monitor control. After completing th
 | Raspberry Pi OS Lite compatible with Zero W, 32-bit | Pi | Operating system; use the ARMv6-compatible image |
 | `ddcutil` | Pi | Detect the monitor and change its input |
 | `i2c-tools` | Pi | Optional I2C diagnostics |
+| `iw` | Pi | Check and disable Wi-Fi power saving |
 | OpenSSH server (`openssh-server`) | Pi | Remote command execution |
 | Avahi (`avahi-daemon`) | Pi | Resolve the Pi's `.local` hostname on compatible networks |
 | Git | Pi; optional | Download this repository |
@@ -57,7 +58,7 @@ Updates can take considerably longer on the single-core Zero W. Use the distribu
 ```bash
 sudo apt update
 sudo apt full-upgrade -y
-sudo apt install -y ddcutil i2c-tools openssh-server avahi-daemon
+sudo apt install -y ddcutil i2c-tools openssh-server avahi-daemon iw
 sudo systemctl enable --now ssh
 sudo systemctl enable --now avahi-daemon
 sudo reboot
@@ -80,6 +81,39 @@ cd g95nc-input-controller
 ```
 
 Cloning downloads the files. Install the key controller separately using Step 3 after verifying monitor control and key wiring.
+
+### Disable Wi-Fi power saving
+
+For the Pi's remote-control connection, disable Wi-Fi power saving immediately and save the setting in the active NetworkManager profile. These commands automatically select the profile used by `wlan0`; no network name needs to be entered.
+
+Check the current runtime setting:
+
+```bash
+iw dev wlan0 get power_save
+```
+
+Save the setting and apply it immediately:
+
+```bash
+wifi_profile_uuid="$(nmcli -g GENERAL.CON-UUID device show wlan0)"
+if [ -n "$wifi_profile_uuid" ] && [ "$wifi_profile_uuid" != "--" ]; then
+    sudo nmcli connection modify uuid "$wifi_profile_uuid" 802-11-wireless.powersave 2
+    sudo iw dev wlan0 set power_save off
+else
+    echo "No active Wi-Fi profile found on wlan0. Connect Wi-Fi before running this step."
+fi
+```
+
+NetworkManager value `2` disables Wi-Fi power saving. The profile setting persists across reboots; the `iw` command applies it to the current session without deliberately disconnecting SSH. It applies to this profile; repeat the step if you later use a different Wi-Fi profile.
+
+Verify immediately, and repeat the runtime check after the next reboot:
+
+```bash
+iw dev wlan0 get power_save
+nmcli -g 802-11-wireless.powersave connection show uuid "$wifi_profile_uuid"
+```
+
+Expect `Power save: off` and a profile value of `2` (possibly displayed as `2 (disable)`). The shell variable is only available in the session where it was assigned; assign it again before checking the profile in a new session. This step assumes NetworkManager manages the connected `wlan0`, as on the Pi used for this setup.
 
 ## 4. Enable the display's I2C access
 
@@ -235,6 +269,7 @@ SSH keys can remove the login password prompt. No background controller service 
 ## 9. Completion checklist
 
 - [ ] Pi boots and reconnects to its network after reboot.
+- [ ] `iw dev wlan0 get power_save` reports `Power save: off` after reboot.
 - [ ] SSH access works from the intended remote computer.
 - [ ] ddcutil detects the G95NC after reboot.
 - [ ] Actual input values are recorded and tested.
@@ -245,6 +280,7 @@ These instructions were checked against upstream documentation, but have not bee
 
 ## References
 
+- [NetworkManager Wi-Fi power-saving settings](https://networkmanager.dev/docs/api/latest/settings-802-11-wireless.html)
 - [Raspberry Pi OS installation](https://www.raspberrypi.com/documentation/computers/getting-started.html)
 - [Raspberry Pi OS downloads and model compatibility](https://www.raspberrypi.com/software/operating-systems/)
 - [Original Raspberry Pi Zero W hardware](https://www.raspberrypi.com/products/raspberry-pi-zero-w/)
