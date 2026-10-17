@@ -2,6 +2,8 @@
 
 Control Samsung G95NC input source with a Raspberry Pi.
 
+![Front view of the G95NC input controller](doc/img/front.jpeg)
+
 ## Tested hardware
 
 - Monitor: Samsung Odyssey Neo G9 57" (G95NC)
