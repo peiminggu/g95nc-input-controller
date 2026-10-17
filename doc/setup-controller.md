@@ -104,8 +104,9 @@ Before enabling autostart, test device access using the actual service account:
 
 ```bash
 sudo install -d -o g95nc-controller -g g95nc-controller -m 700 /run/g95nc-controller
-sudo -u g95nc-controller ddcutil detect
-sudo -u g95nc-controller env LG_WD=/run/g95nc-controller /usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
+sudo install -d -o g95nc-controller -g g95nc-controller -m 700 /var/cache/g95nc-controller
+sudo -u g95nc-controller env HOME=/run/g95nc-controller XDG_CACHE_HOME=/var/cache/g95nc-controller ddcutil detect
+sudo -u g95nc-controller env HOME=/run/g95nc-controller XDG_CACHE_HOME=/var/cache/g95nc-controller LG_WD=/run/g95nc-controller /usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
 ```
 
 GPIO Zero's lgpio backend creates notification pipes. `LG_WD` gives it a writable directory instead of the invoking user's checkout. The service creates this private runtime directory automatically on each start and uses it as its working directory. `/run` is temporary; the installed script and configuration remain in `/opt` and `/etc`.
@@ -134,6 +135,10 @@ RuntimeDirectory=g95nc-controller
 RuntimeDirectoryMode=0700
 WorkingDirectory=/run/g95nc-controller
 Environment=LG_WD=/run/g95nc-controller
+Environment=HOME=/run/g95nc-controller
+CacheDirectory=g95nc-controller
+CacheDirectoryMode=0700
+Environment=XDG_CACHE_HOME=/var/cache/g95nc-controller
 ExecStart=/usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
 Restart=on-failure
 RestartSec=5
@@ -147,7 +152,7 @@ ProtectHome=true
 WantedBy=multi-user.target
 ```
 
-Keep both `Environment=` lines: `LG_WD` sets the GPIO notification directory, while `PYTHONUNBUFFERED=1` makes Python logs appear immediately. Do not comment either out. All runtime directory settings belong under `[Service]`; their order within that section does not matter.
+Keep all `Environment=` lines: `LG_WD` sets the GPIO notification directory, `HOME` provides a writable fallback home, `XDG_CACHE_HOME` gives ddcutil a cache directory, and `PYTHONUNBUFFERED=1` makes Python logs appear immediately. The service account has no ordinary home directory, and `ProtectHome=true` prevents access under `/home`. Systemd creates the runtime and cache directories with the service account as owner. All these settings belong under `[Service]`; their order within that section does not matter.
 
 Save in nano with Ctrl+O, Enter, then Ctrl+X. After editing an existing service, stop any foreground controller test, then reload and restart:
 
@@ -225,6 +230,8 @@ Stop temporarily with `sudo systemctl stop g95nc-controller.service`. Disable au
 | Configuration invalid / service keeps restarting | Read the journal; validate the installed JSON. Assign at least one verified input code. |
 | GPIO access denied | Check the `gpio` group and device permissions; verify Step 2 key detection. |
 | `lguGetWorkDir` / `.lgd-nfy` permission errors | Use the runtime directory and `LG_WD` in the service-account test above. Ensure the installed service includes `RuntimeDirectory`, `WorkingDirectory`, and `LG_WD`. |
+| Permission denied for `/home/g95nc-controller/.cache/ddcutil/dsa` | Update the service's `HOME`, `CacheDirectory`, and `XDG_CACHE_HOME` settings shown above, then reload and restart. This cache problem is separate from monitor communication failures. |
+| Service active but `detect` reports `DDC communication failed` during sleep or after a PC shuts down | Readable EDID does not prove DDC/CI availability. Wake the monitor physically and repeat detection. If communication returns only when awake, verify the monitor's power-saving settings and whether the Pi supplies an active HDMI signal. Retries alone cannot guarantee waking a monitor whose DDC/CI interface is unavailable. |
 | I2C access denied | Check the detected HDMI adapter's `i2c` group permissions and service account membership. |
 | Key appears but switching fails | Repeat the Step 1 command manually; check display number, input value, HDMI/DDC availability, and journal error. |
 | Wrong source appears | Correct the verified input mapping; check whether the key signal wires are swapped. |
