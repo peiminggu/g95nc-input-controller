@@ -11,6 +11,10 @@ RuntimeDirectory=g95nc-controller
 RuntimeDirectoryMode=0700
 WorkingDirectory=/run/g95nc-controller
 Environment=LG_WD=/run/g95nc-controller
+Environment=HOME=/run/g95nc-controller
+CacheDirectory=g95nc-controller
+CacheDirectoryMode=0700
+Environment=XDG_CACHE_HOME=/var/cache/g95nc-controller
 ExecStart=/usr/bin/python3 /opt/g95nc-input-controller/controller.py --config /etc/g95nc-controller/config.json
 Restart=on-failure
 RestartSec=5
